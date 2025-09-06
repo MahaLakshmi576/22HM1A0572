@@ -1,1 +1,75 @@
+from fastapi import FastAPI, HTTPException, Request
+from datetime import datetime, timedelta
+import re
+
+app = FastAPI()
+
+URL_REGEX = re.compile(r"https?://.+\..+")
+
+# Simulated storage (use DB in production)
+links = {}
+click_analytics = {}
+
+def is_valid_url(url: str):
+    return URL_REGEX.match(url)
+
+def generate_shortcode():
+    import random, string
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+
+@app.post("/shorturls")
+async def create_short_url(data: dict):
+    url = data.get("url")
+    validity = data.get("validity", 30)
+    custom = data.get("shortcode")
+
+    if not is_valid_url(url):
+        raise HTTPException(status_code=400, detail="Invalid URL format")
+
+    expiry = datetime.utcnow() + timedelta(minutes=int(validity))
+    shortcode = custom if custom else generate_shortcode()
+    if shortcode in links:
+        raise HTTPException(status_code=409, detail="Shortcode already exists")
+    links[shortcode] = {
+        "url": url,
+        "created_at": datetime.utcnow(),
+        "expiry": expiry,
+        "clicks": 0
+    }
+    return {
+        "shortLink": f"http://hostname:port/{shortcode}",
+        "expiry": expiry.isoformat() + "Z"
+    }
+
+@app.get("/{shortcode}")
+async def redirect_short_url(shortcode: str, request: Request):
+    entry = links.get(shortcode)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Shortcode not found")
+    if datetime.utcnow() > entry["expiry"]:
+        raise HTTPException(status_code=410, detail="Short URL expired")
+    entry["clicks"] += 1
+    # Log click analytics
+    click_analytics.setdefault(shortcode, []).append({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "referrer": request.headers.get('referer', ''),
+        "geoLocation": "IN" # Use actual lookup based on IP
+    })
+    return RedirectResponse(entry["url"], status_code=302)
+
+@app.get("/shorturls/{shortcode}")
+async def get_stats(shortcode: str):
+    entry = links.get(shortcode)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Shortcode not found")
+    clicks = entry["clicks"]
+    data = click_analytics.get(shortcode, [])
+    return {
+        "shortcode": shortcode,
+        "url": entry["url"],
+        "createdAt": entry["created_at"].isoformat() + "Z",
+        "expiry": entry["expiry"].isoformat() + "Z",
+        "clicks": clicks,
+        "clickData": data
+    }
 
