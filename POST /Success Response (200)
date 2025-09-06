@@ -1,0 +1,15 @@
+{
+  "shortcode": "abcd1",
+  "url": "<LONG_URL>",
+  "createdAt": "<ISO_TIMESTAMP>",
+  "expiry": "<ISO_TIMESTAMP>",
+  "clicks": 7,
+  "clickData": [
+    {
+      "timestamp": "<ISO_TIMESTAMP>",
+      "referrer": "<REFERRER>",
+      "geoLocation": "<COUNTRY/CITY>"
+    }
+    // ...
+  ]
+}
